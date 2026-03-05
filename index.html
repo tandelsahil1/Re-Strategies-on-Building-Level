@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Re-Strategies on Building Level</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+
+  <div id="appRoot" class="app">
+    <!-- LEFT PANEL -->
+    <aside id="leftPanel" class="panel">
+      <div class="panel-header">
+        <h1>Re-Strategies on Building Level</h1>
+        <p>CO₂ savings potential</p>
+      </div>
+
+      <section class="card">
+        <div class="card-title">Room Details</div>
+
+        <label class="field field-full">
+          <span>Room Name</span>
+          <input id="roomNameInput" type="text" value="My Premium Room" placeholder="Enter room name" />
+        </label>
+
+        <div class="field-grid">
+          <label class="field">
+            <span>Length (m)</span>
+            <input id="lengthInput" type="number" min="2" max="100" step="0.1" value="5" />
+          </label>
+
+          <label class="field">
+            <span>Width (m)</span>
+            <input id="widthInput" type="number" min="2" max="100" step="0.1" value="10" />
+          </label>
+
+          <label class="field field-full">
+            <span>Height (m)</span>
+            <input id="heightInput" type="number" min="2.2" max="8" step="0.1" value="3" />
+          </label>
+        </div>
+
+        <button id="buildBtn" class="btn btn-primary">Generate Room</button>
+        <div id="dimensionReadout" class="meta-line">Size: —</div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Components</div>
+        <div id="componentRows" class="component-rows"></div>
+
+        <div class="help-text">
+          Select components from here only. (3D click is disabled to prevent accidental hide/show.)
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Room viewer</div>
+        <div class="actions-row">
+          <button id="outsideBtn" class="btn">Outside</button>
+          <button id="insideBtn" class="btn">Inside</button>
+          <button id="resetBtn" class="btn">Reset</button>
+        </div>
+      </section>
+
+      <section class="card status-card">
+        <div class="status-line">
+          <span class="status-label">Room name</span>
+          <span id="roomNameReadout" class="status-value">My Premium Room</span>
+        </div>
+        <div class="status-line">
+          <span class="status-label">Selected components</span>
+          <span id="selectionReadout" class="status-value">None</span>
+        </div>
+      </section>
+    </aside>
+
+    <!-- RIGHT VIEWER (main room) -->
+    <main id="viewerShell" class="viewer-shell">
+      <div class="viewer-topbar">
+        <div id="viewerRoomTitle" class="top-pill">My Room</div>
+        <div class="top-pill subtle">CO₂ savings potential • Multi-select Components</div>
+      </div>
+
+      <div id="viewer3d"></div>
+
+      <div class="viewer-footer">
+        <button id="goScenariosBtn" class="btn btn-accent" disabled>
+          Select RE-Strategies for selected Lindner products
+        </button>
+        <div class="viewer-footer-note">
+          Tip: Select components (and their areas) first, then choose RE-Strategies.
+        </div>
+      </div>
+    </main>
+
+    <!-- SCENARIO MODE -->
+    <section id="scenarioStage" class="scenario-stage" aria-hidden="true">
+      <div class="scenario-header">
+        <div class="scenario-title">
+          <h2>Choose RE-Strategies</h2>
+          <p>Pick one scenario per selected component to calculate total CO₂ savings potential.</p>
+        </div>
+        <div class="scenario-actions">
+          <button id="backToRoomBtn" class="btn">Back to Room</button>
+        </div>
+      </div>
+
+      <div class="scenario-grid">
+        <div class="scenario-left">
+          <div class="scenario-card">
+            <div class="scenario-card-title">Selected Components</div>
+            <div id="scenarioList" class="scenario-list"></div>
+            <button id="showTotalBtn" class="btn btn-primary" disabled>
+              Show total CO₂ savings potential
+            </button>
+          </div>
+        </div>
+
+        <!-- RIGHT SIDE -->
+        <div class="scenario-right">
+  <div id="scenarioDescCard" class="scenario-card">
+    <div class="scenario-card-title">Room details</div>
+    <div id="scenarioDescription" class="scenario-desc">
+      Select a scenario ring to see the description here.
+    </div>
+  </div>
+
+  <div id="totalCard" class="scenario-card total-card hidden">
+    <div class="scenario-card-title">Total CO₂ savings potential</div>
+    <div class="total-wrap">
+
+      <div class="total-donut">
+        <div id="totalDonut" class="donut"></div>
+      </div>
+
+      <div class="total-metrics">
+        <div class="metric">
+          <div class="metric-label">Kg CO₂ without using RE-Strategies</div>
+          <div id="totalKgWithout" class="metric-value">—</div>
+        </div>
+
+        <div class="metric">
+          <div class="metric-label">Kg CO₂ after using RE-Strategies</div>
+          <div id="totalKg" class="metric-value">—</div>
+        </div>
+
+        <div class="metric savings">
+          <div class="metric-label">Kg CO₂ saved</div>
+          <div id="totalKgSaved" class="metric-value">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="total-actions">
+      <button id="resetScenariosBtn" class="btn">Change scenario selection</button>
+    </div>
+  </div>
+</div>
+      </div>
+    </section>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
