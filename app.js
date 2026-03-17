@@ -38,6 +38,7 @@ const totalPercentEl = document.getElementById("totalPercent");
 const totalKgEl = document.getElementById("totalKg");
 const totalKgWithoutEl = document.getElementById("totalKgWithout");
 const totalKgSavedEl = document.getElementById("totalKgSaved");
+const totalEbfEl = document.getElementById("totalEbf"); // ADDED EBF ELEMENT
 const resetScenariosBtn = document.getElementById("resetScenariosBtn");
 
 /* ---------------- Scenario names ---------------- */
@@ -144,6 +145,28 @@ let texCache = new Map();
 let anisotropy = 4;
 let tmpObj = new THREE.Object3D();
 
+/* --- Smooth Camera Animation Engine --- */
+let isAnimatingCamera = false;
+let cameraAnim = {
+  startPos: new THREE.Vector3(),
+  endPos: new THREE.Vector3(),
+  startTarget: new THREE.Vector3(),
+  endTarget: new THREE.Vector3(),
+  startTime: 0,
+  duration: 1000
+};
+
+function animateCameraTo(newPos, newTarget, duration = 1000) {
+  cameraAnim.startPos.copy(camera.position);
+  cameraAnim.endPos.copy(newPos);
+  cameraAnim.startTarget.copy(controls.target);
+  cameraAnim.endTarget.copy(newTarget);
+  cameraAnim.startTime = performance.now();
+  cameraAnim.duration = duration;
+  isAnimatingCamera = true;
+  controls.enabled = false;
+}
+
 /* ---------------- File loading ---------------- */
 async function loadTextFile(path) {
   const res = await fetch(path, { cache: "no-store" });
@@ -177,17 +200,17 @@ async function init() {
   setupUI();
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0d1320);
-  scene.fog = new THREE.Fog(0x0d1320, 20, 60);
+  scene.background = new THREE.Color(0x1a2332);
+  scene.fog = new THREE.Fog(0x1a2332, 20, 60);
 
   camera = new THREE.PerspectiveCamera(52, viewerEl.clientWidth / viewerEl.clientHeight, 0.05, 240);
-  camera.position.set(12, 5.5, 12);
-
+  
   renderer = new THREE.WebGLRenderer({
-    antialias: true,
+    antialias: window.devicePixelRatio < 2,
     alpha: true,
     powerPreference: "high-performance",
   });
+  
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.setSize(viewerEl.clientWidth, viewerEl.clientHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -201,18 +224,21 @@ async function init() {
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.06;
+  controls.dampingFactor = 0.04;
   controls.minDistance = 1.4;
   controls.maxDistance = 80;
   controls.maxPolarAngle = Math.PI * 0.495;
-  controls.target.set(0, 2, 0);
 
   setupLighting();
   setupEnvironment();
   setupEvents();
 
   buildRoom();
-  setOutsideView();
+  
+  const m = state.metrics;
+  camera.position.set(m.length * 0.95, m.floorTopY + m.height * 0.8, m.width * 1.05);
+  controls.target.set(0, m.floorTopY + m.height * 0.45, 0);
+  controls.update();
 
   renderer.setAnimationLoop(renderLoop);
 }
@@ -577,6 +603,19 @@ function updateScenarioButtonState() {
 /* ---------------- Events ---------------- */
 function setupEvents() {
   window.addEventListener("resize", onResize);
+
+  let resizeTicking = false;
+  const resizeObserver = new ResizeObserver(() => {
+    if (!resizeTicking) {
+      requestAnimationFrame(() => {
+        onResize();
+        resizeTicking = false;
+      });
+      resizeTicking = true;
+    }
+  });
+  resizeObserver.observe(viewerShell);
+
   buildBtn.addEventListener("click", buildRoom);
 
   roomNameInput.addEventListener("input", () => {
@@ -585,8 +624,8 @@ function setupEvents() {
     viewerRoomTitle.textContent = state.roomName;
   });
 
-  insideBtn.addEventListener("click", setInsideView);
-  outsideBtn.addEventListener("click", setOutsideView);
+  insideBtn.addEventListener("click", () => flyToInsideView());
+  outsideBtn.addEventListener("click", () => flyToOutsideView());
 
   resetBtn.addEventListener("click", () => {
     state.selected.clear();
@@ -622,8 +661,19 @@ function setupEvents() {
 }
 
 /* ---------------- TOTAL MODE LAYOUT ---------------- */
+/* ---------------- TOTAL MODE LAYOUT ---------------- */
 function layoutTotalViewer() {
   if (!viewerShell) return;
+
+  // STOP: If screen is tablet/mobile size, let the responsive CSS handle it
+  if (window.innerWidth <= 992) {
+    viewerShell.style.position = "";
+    viewerShell.style.left = "";
+    viewerShell.style.top = "";
+    viewerShell.style.width = "";
+    viewerShell.style.height = "";
+    return;
+  }
 
   const leftCard = document.querySelector(".scenario-left .scenario-card");
   const btnRect = showTotalBtn.getBoundingClientRect();
@@ -638,18 +688,20 @@ function layoutTotalViewer() {
   const width = cardRect.width - pad * 2;
   const height = Math.max(360, window.innerHeight - top - 24);
 
-  viewerShell.style.display = "block";
   viewerShell.style.position = "fixed";
   viewerShell.style.left = `${left}px`;
   viewerShell.style.top = `${top}px`;
   viewerShell.style.width = `${width}px`;
   viewerShell.style.height = `${height}px`;
-  viewerShell.style.zIndex = "7";
 }
 
 function clearTotalViewerLayout() {
   if (!viewerShell) return;
-  viewerShell.removeAttribute("style");
+  viewerShell.style.position = "";
+  viewerShell.style.left = "";
+  viewerShell.style.top = "";
+  viewerShell.style.width = "";
+  viewerShell.style.height = "";
 }
 
 /* ---------------- Resize ---------------- */
@@ -663,23 +715,25 @@ function onResize() {
 
   if (!w || !h) return;
 
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
+  if (camera && renderer) {
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+  }
 }
 
 /* =========================================================
    3D Scene setup
 ========================================================= */
 function setupLighting() {
-  ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
+  ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
   scene.add(ambientLight);
 
-  hemiLight = new THREE.HemisphereLight(0xbfd7ff, 0x222731, 0.44);
+  hemiLight = new THREE.HemisphereLight(0xe0ebff, 0x444d5c, 0.7);
   hemiLight.position.set(0, 12, 0);
   scene.add(hemiLight);
 
-  dirLight = new THREE.DirectionalLight(0xeef4ff, 0.68);
+  dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
   dirLight.position.set(-10, 12, -8);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.set(1024, 1024);
@@ -692,7 +746,7 @@ function setupLighting() {
   dirLight.shadow.bias = -0.00015;
   scene.add(dirLight);
 
-  const fill = new THREE.PointLight(0x9fd6ff, 0.25, 60);
+  const fill = new THREE.PointLight(0xaaccff, 0.6, 60);
   fill.position.set(10, 2.2, 10);
   scene.add(fill);
 }
@@ -700,12 +754,16 @@ function setupLighting() {
 function setupEnvironment() {
   const outer = new THREE.Mesh(
     new THREE.CircleGeometry(60, 80),
-    new THREE.MeshStandardMaterial({ color: 0x1b2638, roughness: 0.98, metalness: 0 })
+    new THREE.MeshStandardMaterial({ color: 0x2a364a, roughness: 1.0, metalness: 0 })
   );
   outer.rotation.x = -Math.PI / 2;
   outer.position.y = -0.02;
   outer.receiveShadow = true;
   scene.add(outer);
+
+  const grid = new THREE.GridHelper(60, 60, 0x4a5a75, 0x2a364a);
+  grid.position.y = -0.01;
+  scene.add(grid);
 }
 
 /* =========================================================
@@ -882,17 +940,15 @@ function buildGhostShell() {
   state.objects.root.add(shellGroup);
 
   const shellGeo = new THREE.BoxGeometry(length, height, width);
-  const shellMat = new THREE.MeshPhysicalMaterial({
-    color: 0x8cb7ff,
+  
+  const shellMat = new THREE.MeshStandardMaterial({
+    color: 0xaaccff,
     transparent: true,
-    opacity: 0.06,
-    roughness: 0.22,
-    metalness: 0,
-    transmission: 0.82,
-    thickness: 0.08,
-    ior: 1.25,
-    depthWrite: false,
+    opacity: 0.12,
+    roughness: 0.2,
+    metalness: 0.1,
     side: THREE.DoubleSide,
+    depthWrite: false,
   });
 
   const shell = new THREE.Mesh(shellGeo, shellMat);
@@ -900,7 +956,7 @@ function buildGhostShell() {
   shellGroup.add(shell);
 
   const edgeGeo = new THREE.EdgesGeometry(shellGeo);
-  const edgeMat = new THREE.LineBasicMaterial({ color: 0x66a5ff, transparent: true, opacity: 0.55 });
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x88bbff, transparent: true, opacity: 0.9 });
   const edges = new THREE.LineSegments(edgeGeo, edgeMat);
   edges.position.copy(shell.position);
   shellGroup.add(edges);
@@ -908,7 +964,7 @@ function buildGhostShell() {
   const baseSlab = new THREE.Mesh(
     new THREE.BoxGeometry(length, 0.06, width),
     new THREE.MeshStandardMaterial({
-      color: 0x4a5c76,
+      color: 0x7687a0,
       roughness: 0.92,
       metalness: 0.02,
       transparent: true,
@@ -1191,13 +1247,9 @@ function buildDoor_impl() {
     const frameMat = createDoorFrameMaterial();
     const doorMat = createDoorMaterial(state.settings.door.material);
 
-    // base single-leaf width
     const singleDoorW = m.doorWidth;
-
-    // if double leaf, make total width = 2x single leaf width
     const totalDoorW = isDouble ? singleDoorW * 2 : singleDoorW;
 
-    // geometries
     const frameSideGeo = new THREE.BoxGeometry(0.06, doorH + 0.06, 0.08);
     const frameTopGeo = new THREE.BoxGeometry(totalDoorW, 0.06, 0.08);
 
@@ -1205,7 +1257,7 @@ function buildDoor_impl() {
     const slabGeoSingle = new THREE.BoxGeometry(singleDoorW - 0.08, doorH - 0.04, slabDepth);
 
     const leafGap = 0.035;
-    const leafW = singleDoorW - 0.08; // each leaf same as single-leaf slab width
+    const leafW = singleDoorW - 0.08; 
     const slabGeoLeaf = new THREE.BoxGeometry(leafW, doorH - 0.04, slabDepth);
 
     const g = new THREE.Group();
@@ -1222,7 +1274,6 @@ function buildDoor_impl() {
     g.position.copy(basePos);
     g.rotation.y = rotY;
 
-    // frame
     const frameL = new THREE.Mesh(frameSideGeo, frameMat);
     frameL.position.set(-totalDoorW / 2 + 0.03, y0 + (doorH + 0.06) / 2, 0);
 
@@ -1247,11 +1298,10 @@ function buildDoor_impl() {
       );
       handle.rotation.z = Math.PI / 2;
       handle.position.set(singleDoorW / 2 - 0.12, y0 + doorH * 0.52, 0.01);
-      handle.castShadow = true;
+      handle.castShadow = false;
       g.add(handle);
 
     } else {
-      // place 2 full-width leaves side by side
       const leafOffset = leafW / 2 + leafGap / 2;
 
       const leafL = new THREE.Mesh(slabGeoLeaf, doorMat);
@@ -1272,16 +1322,17 @@ function buildDoor_impl() {
       );
       handleL.rotation.z = Math.PI / 2;
       handleL.position.set(-leafGap / 2, y0 + doorH * 0.52, 0.01);
+      handleL.castShadow = false;
 
       const handleR = handleL.clone();
       handleR.position.x = leafGap / 2;
+      handleR.castShadow = false;
 
       g.add(handleL, handleR);
     }
 
     g.traverse((o) => {
-      if (o.isMesh) {
-        o.castShadow = true;
+      if (o.isMesh && o !== frameL && o !== frameR && o !== frameT) { 
         o.receiveShadow = true;
       }
       o.userData.category = "door";
@@ -1311,7 +1362,7 @@ function buildLights_impl() {
     const c = candidates[i];
 
     const fixture = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.11, 0.11, 0.03, 24),
+      new THREE.CylinderGeometry(0.11, 0.11, 0.03, 12),
       new THREE.MeshStandardMaterial({
         color: 0x2b313b,
         metalness: 0.7,
@@ -1320,11 +1371,10 @@ function buildLights_impl() {
         emissiveIntensity: 0.1,
       })
     );
-    fixture.position.set(c.x, c.y, c.z);
-    fixture.castShadow = true;
+    fixture.castShadow = false;
 
     const diffuser = new THREE.Mesh(
-      new THREE.CircleGeometry(0.083, 24),
+      new THREE.CircleGeometry(0.083, 12),
       new THREE.MeshStandardMaterial({
         color: 0xfff2dc,
         emissive: 0xffd9a8,
@@ -1341,10 +1391,7 @@ function buildLights_impl() {
 
     const spot = new THREE.SpotLight(0xffe0b8, 14, 14, 0.75, 0.45, 1.2);
     spot.position.set(c.x, c.y - 0.03, c.z);
-    spot.castShadow = true;
-    spot.shadow.mapSize.set(512, 512);
-    spot.shadow.bias = -0.00008;
-    spot.shadow.radius = 2;
+    spot.castShadow = false;
 
     const target = new THREE.Object3D();
     target.position.set(c.x, state.metrics.floorTopY + 0.02, c.z);
@@ -1389,26 +1436,26 @@ function buildPedestalSystem_impl() {
 
   const baseGeo = new THREE.BoxGeometry(0.22, 0.03, 0.22);
   const baseInst = new THREE.InstancedMesh(baseGeo, mats.base, anchors.length);
-  baseInst.castShadow = true;
-  baseInst.receiveShadow = true;
+  baseInst.castShadow = false;
+  baseInst.receiveShadow = false;
   baseInst.frustumCulled = false;
 
-  const rodGeo = new THREE.CylinderGeometry(0.025, 0.025, rodHeight, 18);
+  const rodGeo = new THREE.CylinderGeometry(0.025, 0.025, rodHeight, 8); 
   const rodInst = new THREE.InstancedMesh(rodGeo, mats.rod, anchors.length);
-  rodInst.castShadow = true;
-  rodInst.receiveShadow = true;
+  rodInst.castShadow = false;
+  rodInst.receiveShadow = false;
   rodInst.frustumCulled = false;
 
   const headGeo = new THREE.BoxGeometry(0.16, 0.02, 0.16);
   const headInst = new THREE.InstancedMesh(headGeo, mats.head, anchors.length);
-  headInst.castShadow = true;
-  headInst.receiveShadow = true;
+  headInst.castShadow = false;
+  headInst.receiveShadow = false;
   headInst.frustumCulled = false;
 
-  const ringGeo = new THREE.TorusGeometry(0.04, 0.005, 8, 22);
+  const ringGeo = new THREE.TorusGeometry(0.04, 0.005, 4, 10); 
   const ringInst = new THREE.InstancedMesh(ringGeo, mats.ring, anchors.length);
-  ringInst.castShadow = true;
-  ringInst.receiveShadow = true;
+  ringInst.castShadow = false;
+  ringInst.receiveShadow = false;
   ringInst.frustumCulled = false;
 
   anchors.forEach((a, i) => {
@@ -1595,17 +1642,12 @@ function applyPedestalCategory() {
 ========================================================= */
 function createWallMaterial(type) {
   if (type === "glass") {
-    return new THREE.MeshPhysicalMaterial({
+    return new THREE.MeshStandardMaterial({
       color: 0xbfe2ff,
-      transmission: 0.95,
       transparent: true,
       opacity: 0.28,
       roughness: 0.08,
       metalness: 0,
-      thickness: 0.05,
-      ior: 1.45,
-      clearcoat: 1,
-      clearcoatRoughness: 0.05,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
@@ -1652,17 +1694,12 @@ function createFloorMaterial(type) {
 
 function createCeilingMaterial(type) {
   if (type === "glass") {
-    return new THREE.MeshPhysicalMaterial({
+    return new THREE.MeshStandardMaterial({
       color: 0xd9eeff,
-      transmission: 0.92,
       transparent: true,
       opacity: 0.35,
       roughness: 0.04,
       metalness: 0.02,
-      thickness: 0.03,
-      ior: 1.45,
-      clearcoat: 1,
-      clearcoatRoughness: 0.04,
     });
   }
 
@@ -1681,17 +1718,12 @@ function createCeilingMaterial(type) {
 
 function createDoorMaterial(type) {
   if (type === "glass") {
-    return new THREE.MeshPhysicalMaterial({
+    return new THREE.MeshStandardMaterial({
       color: 0xbbe0ff,
-      transmission: 0.95,
       transparent: true,
       opacity: 0.22,
       roughness: 0.05,
       metalness: 0,
-      thickness: 0.03,
-      ior: 1.45,
-      clearcoat: 1,
-      clearcoatRoughness: 0.03,
     });
   }
 
@@ -1743,12 +1775,12 @@ function createPedestalMaterial(type) {
 
 function getLightMood(mode) {
   if (mode === "daylight") {
-    return { color: 0xe8f3ff, diffuser: 0xf2f8ff, spot: 18, ambient: 0.2, hemi: 0.44, sun: 0.7 };
+    return { color: 0xe8f3ff, diffuser: 0xf2f8ff, spot: 18, ambient: 0.45, hemi: 0.7, sun: 1.2 };
   }
   if (mode === "neutral") {
-    return { color: 0xffedd6, diffuser: 0xfff1de, spot: 16, ambient: 0.18, hemi: 0.4, sun: 0.64 };
+    return { color: 0xffedd6, diffuser: 0xfff1de, spot: 16, ambient: 0.40, hemi: 0.6, sun: 1.0 };
   }
-  return { color: 0xffd9ac, diffuser: 0xffe3bc, spot: 15, ambient: 0.16, hemi: 0.36, sun: 0.6 };
+  return { color: 0xffd9ac, diffuser: 0xffe3bc, spot: 15, ambient: 0.35, hemi: 0.55, sun: 0.9 };
 }
 
 /* --------- Procedural textures --------- */
@@ -1914,7 +1946,7 @@ function drawBrushedMetal(ctx, size) {
 }
 
 /* =========================================================
-   Camera
+   Camera / View Controls 
 ========================================================= */
 function setOutsideView() {
   const m = state.metrics;
@@ -1926,23 +1958,30 @@ function setOutsideView() {
   controls.update();
 }
 
-function setInsideView() {
+function flyToOutsideView() {
   const m = state.metrics;
   if (!m.length) return;
-  camera.position.set(0, m.floorTopY + m.height * 0.55, m.width * 0.2);
-  controls.target.set(0, m.floorTopY + m.height * 0.52, -m.width * 0.25);
+  const tPos = new THREE.Vector3(m.length * 0.95, m.floorTopY + m.height * 0.8, m.width * 1.05);
+  const tLook = new THREE.Vector3(0, m.floorTopY + m.height * 0.45, 0);
+  animateCameraTo(tPos, tLook, 900);
+  controls.minDistance = 1.4;
+  controls.maxDistance = 80;
+}
+
+function flyToInsideView() {
+  const m = state.metrics;
+  if (!m.length) return;
+  const tPos = new THREE.Vector3(0, m.floorTopY + m.height * 0.55, m.width * 0.2);
+  const tLook = new THREE.Vector3(0, m.floorTopY + m.height * 0.52, -m.width * 0.25);
+  animateCameraTo(tPos, tLook, 900);
   controls.minDistance = 0.6;
   controls.maxDistance = 60;
-  controls.update();
 }
 
-function renderLoop() {
-  controls.update();
-  renderer.render(scene, camera);
-}
-
-function fitCameraToObject(object3D, padding = 1.18) {
-  const box = new THREE.Box3().setFromObject(object3D);
+function flyToSummaryView() {
+  if (!state.objects?.root) return;
+  
+  const box = new THREE.Box3().setFromObject(state.objects.root);
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
   box.getSize(size);
@@ -1951,22 +1990,34 @@ function fitCameraToObject(object3D, padding = 1.18) {
   const maxDim = Math.max(size.x, size.y, size.z);
   const fov = THREE.MathUtils.degToRad(camera.fov);
   let distance = (maxDim / 2) / Math.tan(fov / 2);
-  distance *= padding;
+  distance *= 1.4; 
 
   const dir = new THREE.Vector3(1.4, 0.1, 1).normalize();
-  camera.position.copy(center).add(dir.multiplyScalar(distance));
+  const targetPos = center.clone().add(dir.multiplyScalar(distance));
 
-  controls.target.copy(center);
-  controls.update();
-
-  camera.near = Math.max(0.05, distance / 200);
-  camera.far = Math.max(200, distance * 20);
-  camera.updateProjectionMatrix();
+  animateCameraTo(targetPos, center, 1200); 
 }
 
-function setSummaryView() {
-  if (!state.objects?.root) return;
-  fitCameraToObject(state.objects.root, 1.5);
+function renderLoop() {
+  if (isAnimatingCamera) {
+    const now = performance.now();
+    let t = (now - cameraAnim.startTime) / cameraAnim.duration;
+    
+    if (t >= 1) {
+      t = 1;
+      isAnimatingCamera = false;
+      controls.enabled = true; 
+    }
+    
+    const ease = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+    
+    camera.position.lerpVectors(cameraAnim.startPos, cameraAnim.endPos, ease);
+    controls.target.lerpVectors(cameraAnim.startTarget, cameraAnim.endTarget, ease);
+    camera.updateProjectionMatrix();
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
 }
 
 /* =========================================================
@@ -1993,7 +2044,8 @@ function exitScenarioMode() {
   totalCard.style.display = "";
   scenarioDescCard.style.display = "";
   clearTotalViewerLayout();
-  onResize();
+  
+  flyToOutsideView();
 }
 
 function pruneScenarioSelections() {
@@ -2246,19 +2298,8 @@ function showTotal() {
   appRoot.classList.add("mode-total");
 
   layoutTotalViewer();
-
-  requestAnimationFrame(() => {
-    onResize();
-    setSummaryView();
-    requestAnimationFrame(() => {
-      onResize();
-      setSummaryView();
-      requestAnimationFrame(() => {
-        onResize();
-        setSummaryView();
-      });
-    });
-  });
+  
+  flyToSummaryView();
 
   const selectedComps = getSelectedCSVComponents();
 
@@ -2295,6 +2336,10 @@ function showTotal() {
   const totalPct = areaSum > 0 ? weightedPctSum / areaSum : 0;
   const kgSaved = kgWithout - kgAfter;
 
+  // CALCULATION FOR EBF 
+  const builtUpArea = state.dims.length * state.dims.width;
+  const ebf = builtUpArea > 0 ? (kgAfter / builtUpArea) : 0;
+
   totalDonut.innerHTML = donutSVG(totalPct, 200);
   requestAnimationFrame(() => animateDonuts(totalDonut));
 
@@ -2302,6 +2347,11 @@ function showTotal() {
   totalKgWithoutEl.textContent = `${kgWithout.toFixed(2)} kg`;
   totalKgEl.textContent = `${kgAfter.toFixed(2)} kg`;
   if (totalKgSavedEl) totalKgSavedEl.textContent = `${kgSaved.toFixed(2)} kg`;
+  
+  // RENDER EBF
+  if (totalEbfEl) {
+    totalEbfEl.innerHTML = `${ebf.toFixed(2)} <span style="font-size: 1.8rem; font-weight: 700; color: var(--muted);">kg CO₂‑eq / m² EBF·a</span>`;
+  }
 
   totalCard.classList.remove("hidden");
 
