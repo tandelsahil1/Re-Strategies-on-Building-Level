@@ -301,11 +301,14 @@ html, body {
   border-radius: 20px;
   overflow: hidden;
   box-shadow: var(--shadow);
+  will-change: width, height, transform, left, top;
   transition:
     transform .5s cubic-bezier(.2,.9,.2,1),
     opacity .35s ease,
     width .5s cubic-bezier(.2,.9,.2,1),
-    height .5s cubic-bezier(.2,.9,.2,1);
+    height .5s cubic-bezier(.2,.9,.2,1),
+    left .5s cubic-bezier(.2,.9,.2,1),
+    top .5s cubic-bezier(.2,.9,.2,1);
 }
 
 .viewer-topbar {
@@ -338,9 +341,9 @@ html, body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 18% 18%, rgba(122,147,255,0.24), transparent 44%),
-    radial-gradient(circle at 82% 84%, rgba(56,212,190,0.18), transparent 46%),
-    linear-gradient(180deg, #101828, #0d1422 60%, #0a101b);
+    radial-gradient(circle at 18% 18%, rgba(122,147,255,0.35), transparent 44%),
+    radial-gradient(circle at 82% 84%, rgba(56,212,190,0.25), transparent 46%),
+    linear-gradient(180deg, #1a2536, #141d2b 60%, #0d131f);
 }
 
 canvas { display: block; }
@@ -771,8 +774,13 @@ svg .donut-progress {
   display: none;
 }
 
+/* FIX: Instead of display: none, we shrink and fade it out so it keeps WebGL bounds */
 .mode-scenarios.mode-scenario-select .viewer-shell {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.95);
+  position: absolute;
+  z-index: -1;
 }
 
 /* TOTAL MODE: viewer shell shown on left by JS */
@@ -782,6 +790,8 @@ svg .donut-progress {
   z-index: 7;
   border-radius: 20px;
   overflow: hidden;
+  opacity: 1;
+  transform: scale(1);
 }
 
 /* Right side in total mode */
@@ -803,21 +813,43 @@ svg .donut-progress {
   overflow-y: auto;
 }
 
-/* Responsive */
+/* Responsive Layout */
 @media (max-width: 1200px) {
   .ring-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 992px) {
+  html, body {
+    /* Allow normal web scrolling on smaller screens */
+    overflow: auto; 
+    height: auto;
+  }
+
   .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .viewer-shell {
+    /* Moves the 3D viewer to the TOP on mobile/tablets */
+    order: 1; 
+    width: 100%;
+    height: 50vh; 
+    min-height: 400px;
+    border-radius: 16px;
+    margin-bottom: 10px;
   }
 
   .panel {
-    max-height: 50vh;
+    /* Moves the controls panel to the BOTTOM */
+    order: 2; 
+    width: 100%;
+    max-height: none; 
+    overflow-y: visible;
   }
 
   .viewer-topbar {
@@ -826,7 +858,7 @@ svg .donut-progress {
   }
 
   .top-pill.subtle {
-    display: none;
+    display: none; /* Hide subtitle to save space */
   }
 
   .comp-controls {
@@ -847,8 +879,18 @@ svg .donut-progress {
     grid-template-columns: 1fr;
   }
 
+  /* Override fixed positioning for the total summary page on mobile */
+  .mode-scenarios.mode-total .viewer-shell {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: 100% !important;
+    height: 45vh !important;
+    transform: none !important;
+  }
+
   .mode-scenarios.mode-total .scenario-right {
-    grid-template-rows: auto auto;
+    grid-template-rows: auto;
   }
 
   .metric-value {
