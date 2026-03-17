@@ -15,7 +15,6 @@
   <div class="bg-glow glow-2"></div>
 
   <div id="appRoot" class="app">
-    <!-- LEFT PANEL -->
     <aside id="leftPanel" class="panel">
       <div class="panel-header">
         <h1>Re-Strategies on Building Level</h1>
@@ -81,7 +80,6 @@
       </section>
     </aside>
 
-    <!-- RIGHT VIEWER (main room) -->
     <main id="viewerShell" class="viewer-shell">
       <div class="viewer-topbar">
         <div id="viewerRoomTitle" class="top-pill">My Room</div>
@@ -100,7 +98,6 @@
       </div>
     </main>
 
-    <!-- SCENARIO MODE -->
     <section id="scenarioStage" class="scenario-stage" aria-hidden="true">
       <div class="scenario-header">
         <div class="scenario-title">
@@ -123,46 +120,51 @@
           </div>
         </div>
 
-        <!-- RIGHT SIDE -->
         <div class="scenario-right">
-  <div id="scenarioDescCard" class="scenario-card">
-    <div class="scenario-card-title">Room details</div>
-    <div id="scenarioDescription" class="scenario-desc">
-      Select a scenario ring to see the description here.
-    </div>
-  </div>
+          <div id="scenarioDescCard" class="scenario-card">
+            <div class="scenario-card-title">Room details</div>
+            <div id="scenarioDescription" class="scenario-desc">
+              Select a scenario ring to see the description here.
+            </div>
+          </div>
 
-  <div id="totalCard" class="scenario-card total-card hidden">
-    <div class="scenario-card-title">Total CO₂ savings potential</div>
-    <div class="total-wrap">
+          <div id="totalCard" class="scenario-card total-card hidden">
+            <div class="scenario-card-title">Total CO₂ savings potential</div>
+            <div class="total-wrap">
 
-      <div class="total-donut">
-        <div id="totalDonut" class="donut"></div>
-      </div>
+              <div class="total-donut">
+                <div id="totalDonut" class="donut"></div>
+              </div>
 
-      <div class="total-metrics">
-        <div class="metric">
-          <div class="metric-label">Kg CO₂ without using RE-Strategies</div>
-          <div id="totalKgWithout" class="metric-value">—</div>
+              <div class="total-metrics">
+                <div class="metric">
+                  <div class="metric-label">Kg CO₂ without using RE-Strategies</div>
+                  <div id="totalKgWithout" class="metric-value">—</div>
+                </div>
+
+                <div class="metric">
+                  <div class="metric-label">Kg CO₂ after using RE-Strategies</div>
+                  <div id="totalKg" class="metric-value">—</div>
+                </div>
+
+                <div class="metric savings">
+                  <div class="metric-label">Kg CO₂ saved</div>
+                  <div id="totalKgSaved" class="metric-value">—</div>
+                </div>
+
+                <div class="metric">
+                  <div class="metric-label">EBF Energiebezugsfläche (energy-reference floor area)</div>
+                  <div id="totalEbf" class="metric-value">—</div>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="total-actions">
+              <button id="resetScenariosBtn" class="btn">Change scenario selection</button>
+            </div>
+          </div>
         </div>
-
-        <div class="metric">
-          <div class="metric-label">Kg CO₂ after using RE-Strategies</div>
-          <div id="totalKg" class="metric-value">—</div>
-        </div>
-
-        <div class="metric savings">
-          <div class="metric-label">Kg CO₂ saved</div>
-          <div id="totalKgSaved" class="metric-value">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="total-actions">
-      <button id="resetScenariosBtn" class="btn">Change scenario selection</button>
-    </div>
-  </div>
-</div>
       </div>
     </section>
   </div>
